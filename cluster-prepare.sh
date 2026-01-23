@@ -52,7 +52,7 @@ if [[ -z "$STEP_ISSUER_EXISTS" ]]; then
     #Get step ca root 
     export ROOT=$(kubectl exec -ti --tty step-certificates-0 -n step-certificates -- sh -c 'step ca root | step base64')
     #Get provisioner kid
-    export KID=$(kubectl exec -ti --tty step-certificates-0 -n step-certificates -- sh -c 'step ca provisioner list' | jq -r '.[0].key.kid')
+    export KID=$(kubectl exec -ti --tty step-certificates-0 -n step-certificates -- sh -c 'step ca provisioner list' | jq -r '.[2].key.kid')
     #Substitute in issuer
     cat $step_dir/issuer.yml.tpl | envsubst | kubectl apply -f -
 fi
@@ -65,7 +65,7 @@ if [[ -z "$GATEWAYS_EXISTS" ]]; then
     kubectl apply -f $envoy_dir/gateway-class.yaml
     #Create default gateway
     export DOMAIN_NAME
-    cat $envoy_dir/default.gateway.yml.tpl | envsubst | kubectl apply -f -
+    cat $envoy_dir/default-gateway.yml.tpl | envsubst | kubectl apply -f -
 fi
 
 
