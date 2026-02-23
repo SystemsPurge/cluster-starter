@@ -1,6 +1,6 @@
 set -e
 
-DOMAIN_NAME="example.com"
+DOMAIN_NAME="k3s.osc.eonerc.rwth-aachen.de"
 
 filename=$(basename "$0")
 PARENT=$(realpath "$0"|sed "s/$filename//g")
@@ -10,20 +10,19 @@ envoy_dir=$PARENT/envoy
 step_dir=$PARENT/smallstep
 
 apps=$(helm list -A -o json | jq -r '.[].chart')
-
-EXPOSE_TYPE=${EXPOSE_TYPE:-"nginx"} #or envoy
-GATEWAYS_EXISTS=$(echo $apps | grep gateways-helm)
-NGINX_EXISTS=$(echo $apps | grep ingress-nginx)
-
-STEP_CERTIFICATES_EXISTS=$(echo $apps | grep step-certificates)
-STEP_ISSUER_EXISTS=$(echo $apps | grep step-issuer)
-CERT_MANAGER_EXISTS=$(echo $apps | grep cert-manager)
+EXPOSE_TYPE="nginx"
+GATEWAYS_EXISTS=$(echo $apps | grep gateways-helm || true)
+NGINX_EXISTS=$(echo $apps | grep ingress-nginx || true)
+STEP_CERTIFICATES_EXISTS=$(echo $apps | grep step-certificates || true)
+STEP_ISSUER_EXISTS=$(echo $apps | grep step-issuer || true)
+CERT_MANAGER_EXISTS=$(echo $apps | grep cert-manager || true)
 
 if [[ -z "$CERT_MANAGER_EXISTS" ]]; then
     #-----------CERT-MANAGER-------------
     #This one should also apply CRD's directly
+    echo "Installing cert-manager"
     helm upgrade --install cert-manager oci://quay.io/jetstack/charts/cert-manager \
-        --namespace cert-manager --create-namespace --set crds.enabled=true --set featureGates="GatewayAPI=true"
+        --namespace cert-manager --create-namespace --set crds.enabled=true --set featureGates="ExperimentalGatewayAPISupport=true"
 fi
 
 if [[ -z "$STEP_CERTIFICATES_EXISTS" ]]; then
@@ -32,7 +31,7 @@ if [[ -z "$STEP_CERTIFICATES_EXISTS" ]]; then
     helm repo add smallstep https://smallstep.github.io/helm-charts/
     helm repo update
     export PARENT
-    cat $PARENT/gen-vals.yaml | envsubst | kubectl apply -f -
+    envsubst '${PARENT}' < $PARENT/gen-vals.yaml | kubectl apply -f -
 
     kubectl wait --for=condition=complete job/step-install --timeout=120s --namespace step-install
 
@@ -40,8 +39,7 @@ if [[ -z "$STEP_CERTIFICATES_EXISTS" ]]; then
     helm upgrade --install --create-namespace \
         --namespace step-certificates -f $step_dir/values.yml \
         step-certificates smallstep/step-certificates
-        
-    cat $PARENT/gen-vals.yaml | envsubst | kubectl delete -f -
+    envsubst '${PARENT}' < $PARENT/gen-vals.yaml | kubectl delete -f -
 
 fi
 

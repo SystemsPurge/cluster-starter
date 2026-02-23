@@ -330,7 +330,7 @@ spec:
       containers:
       - name: generate-values
         image: cr.smallstep.com/smallstep/step-ca:0.29.0
-        command: ["sh","-c","apk add envsubst && chmod -R 777 /shared/ && cd /shared && ./generate-values.sh"]
+        command: ["sh","-c","apk add envsubst openssh-keygen && chmod -R 777 /shared/ && cd /shared && ./generate-values.sh"]
         volumeMounts:
           - name: shared-vol
             mountPath: /shared
