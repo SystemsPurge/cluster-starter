@@ -10,7 +10,11 @@ envoy_dir=$PARENT/envoy
 step_dir=$PARENT/smallstep
 
 apps=$(helm list -A -o json | jq -r '.[].chart')
+
+EXPOSE_TYPE=${EXPOSE_TYPE:-"nginx"} #or envoy
 GATEWAYS_EXISTS=$(echo $apps | grep gateways-helm)
+NGINX_EXISTS=$(echo $apps | grep ingress-nginx)
+
 STEP_CERTIFICATES_EXISTS=$(echo $apps | grep step-certificates)
 STEP_ISSUER_EXISTS=$(echo $apps | grep step-issuer)
 CERT_MANAGER_EXISTS=$(echo $apps | grep cert-manager)
@@ -57,15 +61,24 @@ if [[ -z "$STEP_ISSUER_EXISTS" ]]; then
     cat $step_dir/issuer.yml.tpl | envsubst | kubectl apply -f -
 fi
 
-if [[ -z "$GATEWAYS_EXISTS" ]]; then
-    #--------------ENVOY---------------
-    #Install envoy-gateway-system
-    helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm -n envoy-gateway-system --create-namespace
-    #Create merge gateway class + envoy proxy
-    kubectl apply -f $envoy_dir/gateway-class.yaml
-    #Create default gateway
-    export DOMAIN_NAME
-    cat $envoy_dir/default-gateway.yml.tpl | envsubst | kubectl apply -f -
+if [[ "$EXPOSE_TYPE" == "envoy" ]]; then
+    if [[ -z "$GATEWAYS_EXISTS" ]]; then
+        #--------------ENVOY---------------
+        #Install envoy-gateway-system
+        helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm -n envoy-gateway-system --create-namespace
+        #Create merge gateway class + envoy proxy
+        kubectl apply -f $envoy_dir/gateway-class.yaml
+        #Create default gateway
+        export DOMAIN_NAME
+        cat $envoy_dir/default-gateway.yml.tpl | envsubst | kubectl apply -f -
+    fi
+elif [[ "$EXPOSE_TYPE" == "nginx" ]]; then
+    if [[ -z "$NGINX_EXISTS" ]]; then
+        #-------------- NGINX INGRESS ---------------
+        helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+        helm repo update
+
+        # Install NGINX and tell it to use cert-manager for default SSL if needed
+        helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx -n ingress-nginx --create-namespace
+    fi
 fi
-
-
